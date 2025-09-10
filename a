@@ -1,0 +1,67 @@
+import tkinter as tk
+from tkinter import filedialog
+import os
+import re
+
+def parse_srt(content):
+    pattern = re.compile(r'(\d+)\n(.*?)\n(.*?)\n', re.DOTALL)
+    blocks = []
+    for match in pattern.finditer(content + "\n"):
+        idx = int(match.group(1))
+        time = match.group(2).strip()
+        text = match.group(3).strip()
+        blocks.append((idx, time, text))
+    return blocks
+
+def build_srt(blocks):
+    return "\n".join(f"{idx}\n{time}\n{text}\n" for idx, time, text in blocks)
+
+def shift_blocks(blocks, start_idx, end_idx, new_start_idx):
+    """生成新的平移字幕 (向前移一格，最后补空)"""
+    original = blocks[start_idx-1:end_idx]
+    shifted = []
+    for i in range(len(original)):
+        idx = new_start_idx + i
+        time = original[i][1]
+        text = original[i+1][2] if i+1 < len(original) else ""
+        shifted.append((idx, time, text))
+    return shifted
+
+def process_file(input_path):
+    with open(input_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    blocks = parse_srt(content)
+
+    total = len(blocks)
+    half = total // 2  # 前半日语，后半中文
+
+    # 自动识别范围
+    new_jp = shift_blocks(blocks, 1, half, total + 1)
+    new_cn = shift_blocks(blocks, half + 1, total, total + half + 1)
+
+    all_blocks = blocks + new_jp + new_cn
+    output = build_srt(all_blocks)
+
+    output_path = os.path.join(os.path.dirname(input_path), "output_shifted.srt")
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(output)
+
+    print(f"✅ 已完成！输出文件保存为: {output_path}")
+    print(f"📊 原始字幕总数: {total}，日语部分: 1~{half}，中文字幕部分: {half+1}~{total}")
+    print(f"🆕 新增日语: {total+1}~{total+half}，新增中文: {total+half+1}~{total*2}")
+
+def select_and_process_file():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="请选择SRT字幕文件",
+        filetypes=[("SRT 字幕文件", "*.srt")]
+    )
+    if file_path:
+        print(f"📂 你选择了文件: {file_path}")
+        process_file(file_path)
+    else:
+        print("❌ 没有选择任何文件。")
+
+select_and_process_file()
+
